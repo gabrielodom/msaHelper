@@ -34,8 +34,7 @@ for( res in unique(groups_idx) ) {
   
 }
 
-# To data frame?
-# read_delim(split_ls[[1]][1])  # wrong
+# To data frame
 str_split(split_ls[[1]], pattern = "\t", simplify = TRUE) # a matrix
 
 results_df <- map_dfr(

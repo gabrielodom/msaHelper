@@ -1,0 +1,125 @@
+---
+title: "IUPRED Data Manipulation and Visualization"
+author: "Hiram Duarte and Gabriel Odom"
+date: "4/21/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Introduction
+
+  IUPRED2A is a disorder prediction web-server that provides individual scores 
+that measure the propensity for an amino acid in a sequence to be disordered. 
+The output file for these scores is generated in a .txt format. The purpose of
+this series of scripts is to manipulate the text file, parse out unnecessary
+information, and convert it into .csv format. Once it's converted into .csv 
+format, the disorder scores, mapped to each position of the multiple sequence
+alignment, will be extracted. These results will then be visualized using a 
+dendogram and a heatmap.
+
+## Importing IUPRED Results
+
+  The first step is to upload the prediction files generated from the IUPRED
+webserver into R. A series of steps must be performed in the transition from a
+.result file to a .csv file. There are lines that start with "#" that must be
+parsed out. There are also extra spaces and indels that need to be removed. 
+Both of these are removed with the first few actions. Column names are also
+dropped, so a new vector that contains the lost column headers, named 
+colNames_char, is created. We then extract FASTA headers, as they are important
+for further taxonomic analysis and grouping of data. Results are then split into
+a list that should count out to the total number of sequences in your data. The
+data is then turned into a dataframe and exported in .csv format.
+
+```{Importing IUPRED Results}
+library(tidyverse)
+results_char <- readLines("inst/extdata/data_raw/COMBINED_BLAST2_MUSCLE.result")
+
+###  Drop lines with a "#"  ###
+dropLines_lgl <- str_sub(results_char, start = 1L, end = 1L) %in% c("#", "")
+results_char[dropLines_lgl]
+# This drops the column names, so we will record them here:
+# "# POS\tAMINO ACID\tIUPRED SCORE\tANCHOR SCORE"
+# The column names are
+colNames_char <- c("POS", "AMINO_ACID", "IUPRED_SCORE")
+
+# Keep the lines that we don't drop
+results2_char <- results_char[!dropLines_lgl]
+
+
+###  Extract the FASTA header  ###
+whichHeaders_lgl <- str_sub(results2_char, start = 1L, end = 1L) == ">"
+groups_idx <- cumsum(whichHeaders_lgl)
+
+# Split the results into a list to preserve the header
+split_ls <- vector(mode = "list", length = length(unique(groups_idx)))
+names(split_ls) <- results2_char[whichHeaders_lgl]
+# We expect to see 30 different results
+
+for( res in unique(groups_idx) ) {
+  
+  rowsInGroup_lgl <- groups_idx == res
+  resultInGroup_char <- results2_char[rowsInGroup_lgl]
+  split_ls[[res]] <- resultInGroup_char[-1]
+  
+}
+
+# To data frame?
+# read_delim(split_ls[[1]][1])  # wrong
+str_split(split_ls[[1]], pattern = "\t", simplify = TRUE) # a matrix
+
+results_df <- map_dfr(
+  .x = split_ls,
+  .f = ~{
+    out_mat <- str_split(.x, pattern = "\t", simplify = TRUE)
+    colnames(out_mat) <- c("row_num", colNames_char)
+    as_tibble(out_mat)
+  },
+  .id = "FASTA_HEADER"
+)
+
+
+# Save
+results_df %>% 
+  select(-row_num) %>% 
+  write_csv(
+    file = "inst/extdata/data_clean/muscle_BLAST2_results_20220420.csv"
+  )
+```
+
+## Turning the IUPRED .csv File Into MSA Format
+
+  After turning the results file into a usable .csv file, we can then extract
+the information that we need for further analysis. The information that we need
+from the file is the amino acid, it's position, and the associated disorder
+score. The following code is meant to parse out unusable information, and then
+transform the format of the list into a dataframe where the columns are
+indicative of position number in the multiple sequence alignment.
+
+```{r pressure, echo=FALSE}
+# We are importing our csv's created in our last scripts
+FASTA_File <- read_csv("inst/extdata/data_clean/muscle_BLAST2_FASTA_20220420.csv")
+
+Results_File <- read_csv("inst/extdata/data_clean/muscle_BLAST2_results_20220420.csv")
+
+# Here we are grouping our sequences by fasta header, as they are in list format.
+# Then we are going to mutate our data set so that there are position numbers that are tied to our amino acids
+# Finally, pivot wider is going to turn each of our individual amino acids into columns.
+disorder_df <- 
+  Results_File %>%
+  select(FASTA_HEADER, AMINO_ACID) %>%
+  group_by(FASTA_HEADER) %>%
+  mutate(POSITION_NUMBER = as.character(1:n())) %>% 
+  mutate(
+    POSITION_NUMBER = str_pad(POSITION_NUMBER, side = "left", width = 4, pad = "0")
+  ) %>% 
+  mutate(POSITION_NUMBER = paste0("pos_", POSITION_NUMBER)) %>% 
+  pivot_wider(names_from = POSITION_NUMBER, values_from = AMINO_ACID)
+
+# Here we turn our newly created dataframe into a csv file
+
+write_csv(disorder_df, file = "inst/extdata/data_clean/disorder_20220420.csv")
+```
+
