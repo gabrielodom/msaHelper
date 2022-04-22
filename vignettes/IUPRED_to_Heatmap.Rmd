@@ -1,0 +1,127 @@
+---
+title: "IUPRED Data Wrangling and Visualization"
+author: "Hiram Duarte and Gabriel Odom"
+date: "4/21/2022"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{IUPRED_to_Heatmap}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup, message=FALSE, warning=FALSE}
+library(msaHelper)
+library(tidyverse)
+```
+
+
+
+# Introduction
+IUPRED2A is a disorder prediction web-server that provides individual scores that measure the propensity for an amino acid in a sequence to be disordered. The output file for these scores is generated in a `.txt` format. The purpose of this series of scripts is to manipulate the text file, parse out unnecessary information, and convert it into .csv format. Once it's converted into `.csv` format, the disorder scores, mapped to each position of the multiple sequence alignment, will be extracted. These results will then be visualized using a dendogram and a heatmap.
+
+
+## Wrangling IUPRED Results
+
+### Original IUPred2A Results Form
+The original `.results` file looks like this:
+```{r, View-IUPred2A-Results-Raw}
+head(
+  readLines("../inst/extdata/data_raw/COMBINED_BLAST2_MUSCLE.result"),
+  n = 10
+)
+```
+
+###  Wrangling Step
+We then wrangle this file into a rectangular `.csv`. The first step is to upload the prediction files generated from the IUPRED webserver into R. A series of steps must be performed in the transition from a `.result` file to a `.csv` file. There are lines that start with "#" that must be parsed out. There are also extra spaces and indels that need to be removed. We then extract FASTA headers, as they are important for further taxonomic analysis and grouping of data. Column names must also be created. The data can then be saved into the .csv format.
+```{r, Wrangle-IUPRED-Results, eval=FALSE}
+write_IUPred2A_results_csv(
+  # Path to original .results file
+  inFile  = "../inst/extdata/data_raw/COMBINED_BLAST2_MUSCLE.result",
+  # Path to our new .csv file
+  outFile = "../inst/extdata/data_clean/muscle_BLAST2_results_20220422.csv"
+)
+```
+
+### Clean Data Frame
+Now we can import this data as a data frame:
+```{r, Import-IUPred2A-Results-Clean, message=FALSE}
+resultsIUPred_df <- read_csv(
+  "../inst/extdata/data_clean/muscle_BLAST2_results_20220422.csv"
+)
+
+# Inspect
+resultsIUPred_df
+```
+
+
+
+## Turning the IUPRED .csv File Into MSA Format
+After turning the results file into a usable .csv file, we can then extract the information that we need for further analysis. The information that we need from the file is the amino acid, it's position, and the associated disorder score. The following code is meant to parse out unusable information, and then transform the format of the list into a dataframe where the columns are indicative of position number in the multiple sequence alignment.
+
+```{r, IUPred2A-to-CSV}
+disorder_df <- 
+  resultsIUPred_df %>%
+  select(FASTA_HEADER, IUPRED_SCORE) %>%
+  # Here we are grouping our sequences by protein
+  group_by(FASTA_HEADER) %>%
+  # Now we add position numbers that are tied to our amino acids
+  mutate(POSITION = as.character(1:n())) %>% 
+  # Pad the position numbers so they can be sorted (so that 1, 10, 11 don't get
+  #   grouped together)
+  mutate(POSITION = str_pad(POSITION, side = "left", width = 4, pad = "0")) %>% 
+  mutate(POSITION = paste0("pos_", POSITION)) %>% 
+  # Finally, pivot wider is going to turn each of our individual amino acids
+  #   from rows into columns.
+  pivot_wider(names_from = POSITION, values_from = IUPRED_SCORE)
+
+# Inspect
+disorder_df
+```
+
+Once we have confirmed that we like the results, we can save this data set.
+```{r, Save-Disorder-DF, eval=FALSE}
+write_csv(
+  disorder_df,
+  file = "../inst/extdata/data_clean/disorder_20220422.csv"
+)
+```
+
+
+
+# Adding a Basic Heatmap
+
+## Transform the Data (Again)
+In order to make a heatmap of this data, we need our data in a matrix (rather than a data frame). This requires two steps: move the protein name (FASTA header) to the row names, and then change the class of the data from `data.frame` to `matrix`:
+```{r, heatmap-df-to-mat}
+disorder_mat <- 
+  disorder_df %>% 
+  column_to_rownames("FASTA_HEADER") %>% 
+  as.matrix()
+
+# Inspect
+disorder_mat[1:5, 1:5]
+```
+
+
+## Basic Heatmap
+The columns are re-ordered (but we want to preserve the position), so we set `Colv = NA`. 
+```{r, basic-heatmap}
+heatmap(disorder_mat, Colv = NA)
+```
+
+Our next steps will be to order the rows based on the results of a phylogenetic tree.
+
+
+
+# Session Info
+```{r}
+sessionInfo()
+```
+

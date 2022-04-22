@@ -1,13 +1,37 @@
 Package: msaHelper
-Title: What the Package Does (One Line, Title Case)
-Version: 0.0.0.9000
+Title: Helper functions to wrangle multiple sequence alignment data
+Version: 0.0.0.9002
 Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"),
-           comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: What the package does (one paragraph).
-License: LICENSE
+  c(
+    person(
+      "Gabriel", "Odom", middle = NULL,
+      "gabriel.odom@fiu.edu",
+      role = c("aut", "cre"),
+      comment = c(ORCID = "0000-0003-1341-4555")
+    ),
+    person(
+      "Hiram", "Duarte", middle = NULL,
+      "hduar008@fiu.edu",
+      role = "aut",
+      comment = c(ORCID = "ORCID HERE")
+    )
+  )
+Description: Given that we have .fasta files or IUPred2A .results files, we
+  would like to wrangle them into simpler-to-use .csv files. Additionally, we
+  also want to make some pretty pictures with that data. This is a small package
+  that contains functions to help us work with those files. NOTE: while we 
+  recommend the use of the Tidyverse syntax of R (see http://tidyverse.org), we
+  avoid depending on these functions when writing our package. The vignettes,
+  however, make liberal use of the Tidyverse functions.
+License: GPL (>= 3)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.2
 Imports: 
-    Biostrings
+    Biostrings,
+    stringr
+Suggests:
+    rmarkdown,
+    knitr,
+    tidyverse
+VignetteBuilder: knitr
