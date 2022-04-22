@@ -9,20 +9,14 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-### Introduction
 
-  IUPRED2A is a disorder prediction web-server that provides individual scores 
-that measure the propensity for an amino acid in a sequence to be disordered. 
-The output file for these scores is generated in a .txt format. The purpose of
-this series of scripts is to manipulate the text file, parse out unnecessary
-information, and convert it into .csv format. Once it's converted into .csv 
-format, the disorder scores, mapped to each position of the multiple sequence
-alignment, will be extracted. These results will then be visualized using a 
-dendogram and a heatmap.
+
+# Introduction
+IUPRED2A is a disorder prediction web-server that provides individual scores that measure the propensity for an amino acid in a sequence to be disordered. The output file for these scores is generated in a `.txt` format. The purpose of this series of scripts is to manipulate the text file, parse out unnecessary information, and convert it into .csv format. Once it's converted into `.csv` format, the disorder scores, mapped to each position of the multiple sequence alignment, will be extracted. These results will then be visualized using a dendogram and a heatmap.
+
 
 ## Importing IUPRED Results
-
-  The first step is to upload the prediction files generated from the IUPRED
+The first step is to upload the prediction files generated from the IUPRED
 webserver into R. A series of steps must be performed in the transition from a
 .result file to a .csv file. There are lines that start with "#" that must be
 parsed out. There are also extra spaces and indels that need to be removed. 
@@ -33,9 +27,11 @@ for further taxonomic analysis and grouping of data. Results are then split into
 a list that should count out to the total number of sequences in your data. The
 data is then turned into a dataframe and exported in .csv format.
 
-```{Importing IUPRED Results}
+```{r, Importing-IUPRED-Results}
 library(tidyverse)
-results_char <- readLines("inst/extdata/data_raw/COMBINED_BLAST2_MUSCLE.result")
+results_char <- readLines(
+  "../inst/extdata/data_raw/COMBINED_BLAST2_MUSCLE.result"
+)
 
 ###  Drop lines with a "#"  ###
 dropLines_lgl <- str_sub(results_char, start = 1L, end = 1L) %in% c("#", "")
@@ -82,11 +78,11 @@ results_df <- map_dfr(
 
 
 # Save
-results_df %>% 
-  select(-row_num) %>% 
-  write_csv(
-    file = "inst/extdata/data_clean/muscle_BLAST2_results_20220420.csv"
-  )
+# results_df %>% 
+#   select(-row_num) %>% 
+#   write_csv(
+#     file = "inst/extdata/data_clean/muscle_BLAST2_results_20220420.csv"
+#   )
 ```
 
 ## Turning the IUPRED .csv File Into MSA Format
@@ -98,11 +94,15 @@ score. The following code is meant to parse out unusable information, and then
 transform the format of the list into a dataframe where the columns are
 indicative of position number in the multiple sequence alignment.
 
-```{r pressure, echo=FALSE}
+```{r, IUPred2A-to-CSV}
 # We are importing our csv's created in our last scripts
-FASTA_File <- read_csv("inst/extdata/data_clean/muscle_BLAST2_FASTA_20220420.csv")
+FASTA_File <- read_csv(
+  "../inst/extdata/data_clean/muscle_BLAST2_FASTA_20220420.csv"
+)
 
-Results_File <- read_csv("inst/extdata/data_clean/muscle_BLAST2_results_20220420.csv")
+Results_File <- read_csv(
+  "../inst/extdata/data_clean/muscle_BLAST2_results_20220420.csv"
+)
 
 # Here we are grouping our sequences by fasta header, as they are in list format.
 # Then we are going to mutate our data set so that there are position numbers that are tied to our amino acids
@@ -120,6 +120,21 @@ disorder_df <-
 
 # Here we turn our newly created dataframe into a csv file
 
-write_csv(disorder_df, file = "inst/extdata/data_clean/disorder_20220420.csv")
+# write_csv(disorder_df, file = "inst/extdata/data_clean/disorder_20220420.csv")
+```
+
+
+# Adding a Basic Heatmap
+
+```{r, basic-heatmap}
+# First we need to set the column of fasta headers into row names
+disorder2_df <- column_to_rownames(disorder_df, "FASTA_HEADER")
+
+# Now that the FASTA headers are row names, we can convert the results into a
+#    numeric matrix that can be used for a heat map.
+disorder_mat <- as.matrix(disorder2_df)
+
+# The columns are re-ordered (but we want to preserve the position)
+heatmap(disorder_mat, Colv = NA)
 ```
 
